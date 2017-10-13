@@ -129,7 +129,7 @@ namespace CNTK
             }
             else if (typeof(T).Equals(typeof(double)))
             {
-                return Value._CreateBatchDouble(sampleShape, dataBuffer as  double[], dataStart, dataSize, device, readOnly);
+                return Value._CreateBatchDouble(sampleShape, dataBuffer as double[], dataStart, dataSize, device, readOnly);
             }
             else
             {
@@ -172,13 +172,13 @@ namespace CNTK
         {
             if (typeof(T).Equals(typeof(float)))
             {
-                float[] batchAsArray = sequence.ToArray() as float[];
-                return Value._CreateSequenceFloat(sampleShape, batchAsArray, batchAsArray.Length, sequenceStartFlag, device, readOnly);
+                float[] sequenceBuffer = sequence.ToArray() as float[];
+                return Value._CreateSequenceFloat(sampleShape, sequenceBuffer, sequenceBuffer.Length, sequenceStartFlag, device, readOnly);
             }
             else if (typeof(T).Equals(typeof(double)))
             {
-                double[] batchAsArray = sequence.ToArray() as double[];
-                return Value._CreateSequenceDouble(sampleShape, batchAsArray, batchAsArray.Length, sequenceStartFlag, device, readOnly);
+                double[] sequenceBuffer = sequence.ToArray() as double[];
+                return Value._CreateSequenceDouble(sampleShape, sequenceBuffer, sequenceBuffer.Length, sequenceStartFlag, device, readOnly);
             }
             else
             {
