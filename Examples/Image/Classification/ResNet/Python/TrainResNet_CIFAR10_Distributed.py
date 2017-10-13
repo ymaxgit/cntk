@@ -52,7 +52,7 @@ def create_resnet_network(network_name):
     elif network_name == 'resnet110': 
         z = create_cifar10_model(input_var, 18, num_classes)
     else: 
-        return RuntimeError("Unknown model name!")
+        raise RuntimeError("Unknown model name!")
 
     # loss and metric
     ce = cross_entropy_with_softmax(z, label_var)
@@ -75,7 +75,7 @@ def create_trainer(network, minibatch_size, epoch_size, num_quantization_bits, b
     elif network['name'] == 'resnet110': 
         lr_per_mb = [0.1]*1+[1.0]*80+[0.1]*40+[0.01]
     else: 
-        return RuntimeError("Unknown model name!")
+        raise RuntimeError("Unknown model name!")
 
     momentum_time_constant = -minibatch_size/np.log(0.9)
     l2_reg_weight = 0.0001
@@ -147,7 +147,7 @@ def resnet_cifar10(train_data, test_data, mean_data, network_name, epoch_size, n
     trainer = create_trainer(network, minibatch_size, epoch_size, num_quantization_bits, block_size, warm_up, progress_printer)
     train_source = create_image_mb_source(train_data, mean_data, train=True, total_number_of_samples=max_epochs * epoch_size)
     test_source = create_image_mb_source(test_data, mean_data, train=False, total_number_of_samples=cntk.io.FULL_DATA_SWEEP)
-    train_and_test(network, trainer, train_source, test_source, minibatch_size, epoch_size, profiling)
+    train_and_test(network, trainer, train_source, test_source, minibatch_size, epoch_size, restore, profiling)
 
 
 if __name__=='__main__':

@@ -26,6 +26,24 @@ from cntk.internal.sanitize import is_byte_buffer
 from ..variables import Record, Variable
 
 
+
+@unique
+class ModelFormat(Enum):
+    '''
+    Describes the supported disk format for CNTK model.
+    '''
+
+    CNTKv2 = cntk_py.ModelFormat_CNTKv2
+    '''
+    Default CNTK version 2 format, it supports all CNTK functionalities.
+    '''
+
+    ONNX   = cntk_py.ModelFormat_ONNX
+    '''
+    Open Neural Network Exchange format from https://github.com/onnx/onnx, ONNX currently support
+    subset of CNTK functionalities.
+    '''
+
 @unique
 class CloneMethod(Enum):
     '''
@@ -226,7 +244,7 @@ class Function(cntk_py.Function):
 
             # verify that we got the parameter order right
             out_arg_names = [arg.name for arg in out.signature]
-            assert out_arg_names == arg_names
+            assert out_arg_names == arg_names, (out_arg_names, arg_names)
 
             if len(out.signature) != len(args):
                 unfulfilled_args = set(out.signature) - set(args)
@@ -391,7 +409,7 @@ class Function(cntk_py.Function):
         # numeric: evaluate
         outputs = self.outputs
         _, output_map = self.forward(arg_map, outputs)
-        assert len(output_map) == len(outputs)
+        assert len(output_map) == len(outputs), (output_map, outputs)
         if len(output_map) > 1: # tuple-valued: return tuple
             return tuple(output_map[output] for output in outputs)
         else: # single value: return numpy array and that's it
@@ -1308,7 +1326,7 @@ class Function(cntk_py.Function):
          >>> learner = cntk.sgd(model.parameters, cntk.learning_rate_schedule(0.1, cntk.UnitType.minibatch))
          >>> progress = criterion.train((X, Y), minibatch_size=25, max_epochs=2, epoch_size=125, parameter_learners=[learner])
          >>> print("%.2f" % progress.epoch_summaries[-1].loss) # get the final epoch's loss value
-         0.76
+         0.68
 
         Returns:
          An object `progress` with `progress.epoch_summaries` and `progress.updates` being the progressions of av loss, av metric, and number of labels
@@ -1425,6 +1443,9 @@ class Function(cntk_py.Function):
             ValueError('callbacks list must only contain objects of type ProgressWriter')
         progress_writers = callbacks or []
         evaluator = Evaluator(output, progress_writers + [collector])
+
+        if minibatch_source.is_infinite():
+            raise ValueError("minibatch_source must have a limited number of samples or sweeps.")
         # evaluation loop
         while True:
             data = minibatch_source.next_minibatch(minibatch_size) # fetch minibatch
@@ -1435,10 +1456,9 @@ class Function(cntk_py.Function):
         return collector.test_summaries[-1]
 
     @typemap
-    def save(self, filename):
+    def save(self, filename, format=ModelFormat.CNTKv2):
         '''
-        Save this function graph into a model file using protobuf-based
-        serialization.
+        Save this function graph into a model file using the specified format.
 
         Use distributed.Communicator.is_main() to gate your call to save()
         in distributed environment.
@@ -1446,7 +1466,7 @@ class Function(cntk_py.Function):
         Args:
             filename (str): model path
         '''
-        return super(Function, self).save(filename)
+        return super(Function, self).save(filename, format.value)
 
     @typemap
     def restore(self, filename):
@@ -1489,7 +1509,7 @@ class Function(cntk_py.Function):
 
     @staticmethod
     @typemap
-    def load(model, device=None):
+    def load(model, device=None, format=ModelFormat.CNTKv2):
         '''
         Load the ``model``, that has been saved using :func:`~cntk.ops.functions.Function.save`.
 
@@ -1498,6 +1518,8 @@ class Function(cntk_py.Function):
              containing the binary representation of a model.
             device (:class:`~cntk.device.DeviceDescriptor`, defaults to the current globally default device):
              specifies the device to allocate the model on.
+            format (:class:`~cntk.ModelFormat`, defaults to CNTKv2 format): specifies the format of the file to load.
+             if the specified format is ONNX, then model must be a filename.
 
         Returns:
             root node
@@ -1515,12 +1537,14 @@ class Function(cntk_py.Function):
                 pass
 
         if is_buffer:
+            if format != ModelFormat.CNTKv2:
+                raise ValueError('Loading from buffer only supported for CNTKv2 format.')
             return cntk_py.Function.load_from_buffer(model, device)
 
         if is_file:
-            return cntk_py.Function.load(model, device)
+            return cntk_py.Function.load(str(model), device, format.value)
 
-        raise ValueError('Cannot load a model that is neither a file nor a byte buffer.')
+        raise ValueError('Cannot load the model {} that is neither a file nor a byte buffer.'.format(model))
 
     @staticmethod
     def with_signature(*args, **kwargs):
@@ -1600,11 +1624,11 @@ def native_user_function(op_id, operands, attributes=None, user_function_instanc
     return cntk_py.Function_native_user_function(op_id, operands, attributes, user_function_instance_name)
 
 @typemap
-def load_model(model, device=None):
+def load_model(model, device=None, format=ModelFormat.CNTKv2):
     '''
     Alias for :func:`~cntk.ops.functions.Function.load`.
     '''
-    return Function.load(model, device)
+    return Function.load(model, device, format)
 
 class UserFunction(Function):
     '''
@@ -1621,8 +1645,12 @@ class UserFunction(Function):
         name (str): name of this function
     '''
 
-    def __init__(self, inputs, as_numpy=True, name=''):
-        super(UserFunction, self).__init__(inputs, name)
+    def __init__(self, inputs, as_numpy=True, attributes=None, name=''):
+        if  attributes is None:
+            super(UserFunction, self).__init__(inputs, name)
+        else:
+            attributes = _py_dict_to_cntk_dict(attributes)
+            super(UserFunction, self).__init__(inputs, attributes, name)
         self.set_native(False)
         self.as_numpy = as_numpy
 
