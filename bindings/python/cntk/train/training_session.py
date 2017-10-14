@@ -8,8 +8,9 @@ from enum import Enum, unique
 from .. import cntk_py
 from ..device import use_default_device
 from cntk.internal import sanitize_var_map, sanitize_function, typemap, _as_tuple
+import enum
 
-class DataUnit:
+class DataUnit(enum.IntEnum):
 
     '''
     Indicates that whether the processing steps in the training data is counted by samples, minibatch or epoch.
@@ -40,7 +41,7 @@ def _unpack_parameter_frequency(frequency):
         if isinstance(frequency, int):
             #default to sample unit
             return frequency, DataUnit.sample
-        elif isinstance(frequency, tuple):
+        elif isinstance(frequency, tuple) and isinstance(frequency[0], int) and isinstance(frequency[1], DataUnit):
             return frequency
         else:
             raise('Unsupported frequency specification: %s' % frequency)
